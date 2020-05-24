@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
+import java.net.URISyntaxException;
 import net.siisise.io.FileIO;
 import net.siisise.json.JSON;
 import net.siisise.json.JSONValue;
@@ -13,10 +14,24 @@ import net.siisise.json.JSONValue;
  */
 public class RestClient {
 
+    private String baseuri;
     private final String accessToken;
-
+    
     public RestClient(String accessToken) {
         this.accessToken = accessToken;
+    }
+
+    public RestClient(String baseURI, String accessToken) {
+        baseuri = baseURI;
+        this.accessToken = accessToken;
+    }
+    
+    public void setBaseURI(String base) {
+        baseuri = base;
+    }
+    
+    public JSONValue get(String uri) throws IOException, URISyntaxException {
+        return get(new URI(baseuri + uri));
     }
 
     /**
@@ -36,6 +51,10 @@ public class RestClient {
         conn.connect();
 
         return result(conn);
+    }
+    
+    public JSONValue post(String uri, String... parameters) throws IOException, URISyntaxException {
+        return post(new URI(baseuri + uri), parameters);
     }
 
     /**
