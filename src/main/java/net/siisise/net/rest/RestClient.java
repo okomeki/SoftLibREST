@@ -7,26 +7,22 @@ import java.lang.reflect.Type;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import net.siisise.io.FileIO;
 import net.siisise.json2.JSON2;
-import net.siisise.json2.JSON2Object;
 import net.siisise.json2.JSON2Value;
+import net.siisise.net.HttpClient;
 import net.siisise.omap.OMAP;
 
 /**
  * JSONを使うのでSoftLibに置けない仮置き場
  */
-public class RestClient {
-
-    private String baseuri;
-    
-    JSON2Object<String> headers = new JSON2Object();
-    
-    private final String accessToken;
-//    private String accept = "application/json";
+public class RestClient extends HttpClient {
 
     public RestClient(String accessToken) {
-        this.accessToken = accessToken;
         headers.put("Accept", "application/json");
         headers.put("Authorization", "Bearer " + accessToken);
     }
@@ -36,15 +32,11 @@ public class RestClient {
         baseuri = baseURI;
     }
 
-    public void setBaseURI(String base) {
-        baseuri = base;
-    }
-
-    public JSON2Value get(String uri) throws IOException, URISyntaxException {
+    public <T> T get(String uri) throws IOException, URISyntaxException {
         return get(uri, JSON2Value.class);
     }
 
-    public JSON2Value get(URI uri) throws IOException {
+    public <T> T get(URI uri) throws IOException {
         return get(uri, JSON2Value.class);
     }
 
@@ -87,25 +79,38 @@ public class RestClient {
     public <T> T get(URI uri, Type type) throws IOException {
         HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
 
-        for ( String key : headers.keySet() ) {
+        for (String key : headers.keySet()) {
             String value = headers.get(key);
             conn.setRequestProperty(key, value);
         }
-//        conn.setRequestProperty("Accept", "application/json");
+
+        conn.setRequestProperty("Accept", "application/json");
 //        if (accessToken != null) {
 //            conn.setRequestProperty("Authorization", "Bearer " + accessToken);
 //        }
-        conn.connect();
 
         return result(conn, type);
+    }
+
+    public JSON2Value post(String uri, Map<String, String> paramMap) throws IOException, URISyntaxException {
+        return post(new URI(baseuri + uri), paramMap);
     }
 
     public JSON2Value post(String uri, String... parameters) throws IOException, URISyntaxException {
         return post(new URI(baseuri + uri), parameters);
     }
 
+    public JSON2Value post(URI uri, Map<String, String> paramMap) throws IOException {
+        List<String> params = new ArrayList<>();
+        for (Map.Entry<String, String> e : paramMap.entrySet()) {
+            params.add(e.getKey());
+            params.add(e.getValue());
+        }
+        return post(uri, params.toArray(new String[0]));
+    }
+
     /**
-     * POST. ToDo: パラメータのエンコードしてない.
+     * POST.
      *
      * @param uri
      * @param parameters エンコードしてない
@@ -116,7 +121,7 @@ public class RestClient {
         HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
         // https限定
         conn.setRequestMethod("POST");
-        for ( String key : headers.keySet() ) {
+        for (String key : headers.keySet()) {
             String value = headers.get(key);
             conn.setRequestProperty(key, value);
         }
@@ -130,22 +135,52 @@ public class RestClient {
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < parameters.length; i += 2) {
                 if (sb.length() > 0) {
-                    sb.append("&");
+                    sb.append('&');
                 }
-                sb.append(parameters[i]);
-                sb.append("=");
-                sb.append(parameters[i + 1]);
+                sb.append(percentEncode(parameters[i]));
+                sb.append('=');
+                sb.append(percentEncode(parameters[i + 1]));
             }
-            byte[] utf = sb.toString().getBytes("utf-8");
+            byte[] utf = sb.toString().getBytes(StandardCharsets.UTF_8);
             conn.setRequestProperty("Content-Length", "" + utf.length);
             OutputStream out = conn.getOutputStream();
             out.write(utf);
             out.flush();
         }
 
-        conn.connect();
-
         return result(conn, JSON2Value.class);
+    }
+
+    /**
+     * percent-encoding application/x-www-form-urlencoded 専用 RFC 3986 Section
+     * 2.1. RFC 7xxx
+     * https://developer.mozilla.org/ja/docs/Glossary/percent-encoding
+     * をUTF-8に対応してみたら
+     *
+     * @param src
+     * @return
+     */
+    private String percentEncode(String src) {
+        int[] cps = src.codePoints().toArray();
+        StringBuilder sb = new StringBuilder();
+        for (int cp : cps) {
+            if ((cp >= '0' && cp <= '9')
+                    || (cp >= 'a' && cp <= 'z')
+                    || (cp >= 'A' && cp <= 'Z')
+                    || cp == '*' || cp == '-' || cp == '.' || cp == '_') {
+                sb.appendCodePoint(cp);
+            } else if (cp == ' ') {
+                sb.append('+');
+            } else {
+                byte[] bs = String.valueOf(Character.toChars(cp)).getBytes(StandardCharsets.UTF_8);
+                for (byte b : bs) {
+                    String bc = "0" + Integer.toHexString(b & 0xff);
+                    sb.append('%');
+                    sb.append(bc.substring(bc.length() - 2));
+                }
+            }
+        }
+        return sb.toString();
     }
 
     /**
@@ -156,6 +191,9 @@ public class RestClient {
      * @throws IOException
      */
     private <T> T result(HttpURLConnection conn, Type type) throws IOException {
+        conn.connect();
+        // conn.getResponseCode();
+        String contentType = conn.getContentType();
         byte[] result = FileIO.binRead(conn.getInputStream());
         conn.disconnect();
         return OMAP.valueOf(JSON2.parse(result), type);

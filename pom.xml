@@ -2,14 +2,14 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>net.siisise</groupId>
-    <artifactId>SoftLibREST</artifactId>
-    <version>1.1-SNAPSHOT</version>
+    <artifactId>softlib-rest</artifactId>
+    <version>1.1.0</version>
     <packaging>jar</packaging>
     <dependencies>
         <dependency>
             <groupId>net.siisise</groupId>
-            <artifactId>SoftLibJSON</artifactId>
-            <version>1.1-SNAPSHOT</version>
+            <artifactId>softlib-json</artifactId>
+            <version>1.1.0</version>
             <type>jar</type>
         </dependency>
         <!-- JAX-RS client用 -->
@@ -36,28 +36,42 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>
-            <version>5.7.1</version>
+            <version>5.8.1</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-params</artifactId>
-            <version>5.7.1</version>
+            <version>5.8.1</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-engine</artifactId>
-            <version>5.7.1</version>
+            <version>5.8.1</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>net.siisise</groupId>
-            <artifactId>SoftLibCrypto</artifactId>
-            <version>1.0-SNAPSHOT</version>
+            <artifactId>softLib-crypto</artifactId>
+            <version>1.0.0</version>
             <type>jar</type>
         </dependency>
     </dependencies>
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <name>GitHub okomeki Apache Maven SoftLib Packages</name>
+            <layout>default</layout>
+            <url>https://maven.pkg.github.com/okomeki/softlibrest</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+    </distributionManagement>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>
