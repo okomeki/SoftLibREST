@@ -12,10 +12,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import net.siisise.io.FileIO;
-import net.siisise.json2.JSON2;
-import net.siisise.json2.JSON2Value;
+import net.siisise.json.JSON2;
+import net.siisise.json.JSON2Value;
 import net.siisise.net.HttpClient;
-import net.siisise.omap.OMAP;
+import net.siisise.json.bind.OMAP;
 
 /**
  * JSONを使うのでSoftLibに置けない仮置き場
@@ -79,15 +79,7 @@ public class RestClient extends HttpClient {
     public <T> T get(URI uri, Type type) throws IOException {
         HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
 
-        for (String key : headers.keySet()) {
-            String value = headers.get(key);
-            conn.setRequestProperty(key, value);
-        }
-
-        conn.setRequestProperty("Accept", "application/json");
-//        if (accessToken != null) {
-//            conn.setRequestProperty("Authorization", "Bearer " + accessToken);
-//        }
+        headers.forEach((key, val) -> conn.setRequestProperty(key, val) );
 
         return result(conn, type);
     }
@@ -102,15 +94,15 @@ public class RestClient extends HttpClient {
 
     public JSON2Value post(URI uri, Map<String, String> paramMap) throws IOException {
         List<String> params = new ArrayList<>();
-        for (Map.Entry<String, String> e : paramMap.entrySet()) {
-            params.add(e.getKey());
-            params.add(e.getValue());
-        }
+        paramMap.forEach((key, val) -> {
+            params.add(key);
+            params.add(val);
+        });
         return post(uri, params.toArray(new String[0]));
     }
 
     /**
-     * POST.
+     * POST. application/x-www-form-urlencoded
      *
      * @param uri
      * @param parameters エンコードしてない
@@ -121,14 +113,8 @@ public class RestClient extends HttpClient {
         HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
         // https限定
         conn.setRequestMethod("POST");
-        for (String key : headers.keySet()) {
-            String value = headers.get(key);
-            conn.setRequestProperty(key, value);
-        }
-//        conn.setRequestProperty("Accept", "application/json");
-//        if (accessToken != null) {
-//            conn.setRequestProperty("Authorization", "Bearer " + accessToken);
-//        }
+        headers.forEach((key, val) -> conn.setRequestProperty(key, val));
+
         if (parameters.length > 0) {
             conn.setDoOutput(true);
             conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
