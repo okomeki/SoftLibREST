@@ -2,20 +2,22 @@ package net.siisise.net.rest;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Type;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import net.siisise.io.FileIO;
-import net.siisise.json.JSON2;
-import net.siisise.json.JSON2Value;
 import net.siisise.net.HttpClient;
 import net.siisise.json.bind.OMAP;
+import net.siisise.json.JSON;
+import net.siisise.json.JSONValue;
 
 /**
  * JSONを使うのでSoftLibに置けない仮置き場
@@ -24,20 +26,45 @@ public class RestClient extends HttpClient {
 
     public RestClient(String accessToken) {
         headers.put("Accept", "application/json");
-        headers.put("Authorization", "Bearer " + accessToken);
+        if ( accessToken != null ) {
+            headers.put("Authorization", "Bearer " + accessToken);
+        } else {
+            headers.remove("Authorization");
+        }
     }
 
     public RestClient(String baseURI, String accessToken) {
         this(accessToken);
         baseuri = baseURI;
     }
+    
+    /**
+     * ToDo: escape
+     * @param uri
+     * @param nv
+     * @return 
+     */
+    public static URI param(String uri, String... nv) {
+        StringBuilder u = new StringBuilder(uri);
+        for ( int i = 0; i < nv.length; i+=2) {
+            u.append(i == 0 ? "?" : "&");
+            u.append(nv[i]);
+            u.append("=");
+            try {
+                u.append(URLEncoder.encode(nv[i+1],"utf-8"));
+            } catch (UnsupportedEncodingException ex) {
+                // ない
+            }
+        }
+        return URI.create(u.toString());
+    }
 
     public <T> T get(String uri) throws IOException, URISyntaxException {
-        return get(uri, JSON2Value.class);
+        return get(uri, JSONValue.class);
     }
 
     public <T> T get(URI uri) throws IOException {
-        return get(uri, JSON2Value.class);
+        return get(uri, JSONValue.class);
     }
 
     /**
@@ -84,15 +111,15 @@ public class RestClient extends HttpClient {
         return result(conn, type);
     }
 
-    public JSON2Value post(String uri, Map<String, String> paramMap) throws IOException, URISyntaxException {
+    public JSONValue post(String uri, Map<String, String> paramMap) throws IOException, URISyntaxException {
         return post(new URI(baseuri + uri), paramMap);
     }
 
-    public JSON2Value post(String uri, String... parameters) throws IOException, URISyntaxException {
+    public JSONValue post(String uri, String... parameters) throws IOException, URISyntaxException {
         return post(new URI(baseuri + uri), parameters);
     }
 
-    public JSON2Value post(URI uri, Map<String, String> paramMap) throws IOException {
+    public JSONValue post(URI uri, Map<String, String> paramMap) throws IOException {
         List<String> params = new ArrayList<>();
         paramMap.forEach((key, val) -> {
             params.add(key);
@@ -109,7 +136,7 @@ public class RestClient extends HttpClient {
      * @return JSON
      * @throws IOException
      */
-    public JSON2Value post(URI uri, String... parameters) throws IOException {
+    public JSONValue post(URI uri, String... parameters) throws IOException {
         HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
         // https限定
         conn.setRequestMethod("POST");
@@ -134,7 +161,7 @@ public class RestClient extends HttpClient {
             out.flush();
         }
 
-        return result(conn, JSON2Value.class);
+        return result(conn, JSONValue.class);
     }
 
     /**
@@ -146,7 +173,7 @@ public class RestClient extends HttpClient {
      * @param src
      * @return
      */
-    private String percentEncode(String src) {
+    private static String percentEncode(String src) {
         int[] cps = src.codePoints().toArray();
         StringBuilder sb = new StringBuilder();
         for (int cp : cps) {
@@ -182,7 +209,7 @@ public class RestClient extends HttpClient {
         String contentType = conn.getContentType();
         byte[] result = FileIO.binRead(conn.getInputStream());
         conn.disconnect();
-        return OMAP.valueOf(JSON2.parse(result), type);
-//                JSON2.parseWrap(result);
+        return OMAP.valueOf(JSON.parse(result), type);
+//                JSON.parseWrap(result);
     }
 }
