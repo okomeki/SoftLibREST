@@ -92,30 +92,15 @@
         <dependency>
             <groupId>net.siisise</groupId>
             <artifactId>softlib-json</artifactId>
-            <version>1.2.1</version>
+            <version>1.2.2</version>
             <type>jar</type>
         </dependency>
-        <!-- JAX-RS client用 -->
-        <!--
         <dependency>
-            <groupId>org.glassfish.jersey.core</groupId>
-            <artifactId>jersey-client</artifactId>
-            <version>2.29.1</version>
-        </dependency>
-        <dependency>
-            <groupId>org.glassfish.jersey.inject</groupId>
-            <artifactId>jersey-hk2</artifactId>
-            <version>2.29.1</version>
-        </dependency>
-        -->
-<!--
-        <dependency>
-            <groupId>org.glassfish.jersey</groupId>
-            <artifactId>jax-rs-ri</artifactId>
-            <version>2.0-rc1</version>
+            <groupId>net.siisise</groupId>
+            <artifactId>softlib-rfc</artifactId>
+            <version>1.0.1</version>
             <type>jar</type>
         </dependency>
-                -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>
@@ -138,12 +123,6 @@
             <groupId>net.siisise</groupId>
             <artifactId>softlib-crypto</artifactId>
             <version>1.0.2-SNAPSHOT</version>
-            <type>jar</type>
-        </dependency>
-        <dependency>
-            <groupId>net.siisise</groupId>
-            <artifactId>softlib-xml</artifactId>
-            <version>1.0.1-SNAPSHOT</version>
             <type>jar</type>
         </dependency>
     </dependencies>
