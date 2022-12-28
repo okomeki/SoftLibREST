@@ -17,13 +17,11 @@ package net.siisise.rest;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Type;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,6 +30,7 @@ import net.siisise.io.FileIO;
 import net.siisise.net.HttpClient;
 import net.siisise.json.bind.OMAP;
 import net.siisise.json.JSON;
+import net.siisise.json.JSONObject;
 import net.siisise.json.JSONValue;
 
 /**
@@ -60,22 +59,39 @@ public class RestClient extends HttpClient {
     }
 
     /**
-     *
+     * パラメータを適度に追加する.
      * @param uri
      * @param nv
      * @return
      */
     public static URI param(String uri, String... nv) {
         StringBuilder u = new StringBuilder(uri);
+        char ar = '?';
         for (int i = 0; i < nv.length; i += 2) {
-            u.append(i == 0 ? "?" : "&");
+            u.append(ar);
             u.append(formPercentEncode(nv[i]));
             u.append("=");
-            try {
-                u.append(URLEncoder.encode(nv[i + 1], "utf-8"));
-            } catch (UnsupportedEncodingException ex) {
-                // ない
-            }
+            u.append(formPercentEncode(nv[i + 1]));
+            ar = '&';
+        }
+        return URI.create(u.toString());
+    }
+
+    /**
+     * 
+     * @param uri
+     * @param params
+     * @return 
+     */
+    public static URI param(String uri, JSONObject params) {
+        StringBuilder u = new StringBuilder(uri);
+        char ap = '?';
+        for ( Object key : params.keySet() ) {
+            u.append(ap);
+            u.append(formPercentEncode((String)key));
+            u.append("=");
+            u.append(formPercentEncode((String)params.get(key)));
+            ap ='&';
         }
         return URI.create(u.toString());
     }

@@ -35,6 +35,7 @@ import net.siisise.io.FileIO;
 import net.siisise.io.Packet;
 import net.siisise.io.PacketA;
 import net.siisise.json.JSONObject;
+import net.siisise.json.jws.JWS7515;
 
 /**
  * OAuth client 用の簡易HTTPサーバ
@@ -177,6 +178,12 @@ public class HttpServer implements Runnable {
                 out.write(rh.toString().getBytes(utf8));
                 
                 out.write(result.toJSON().getBytes(utf8));
+                JSONObject ac = (JSONObject) result.getJSON("ac");
+                
+                String idToken = (String) ac.get("id_token");
+                
+                out.write(idToken.getBytes(utf8));
+                out.write(JWS7515.clientAll(idToken).toJSON().getBytes(utf8));
                 out.flush();
             } finally {
                 soc.close();

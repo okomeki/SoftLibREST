@@ -75,16 +75,15 @@ public class OAuthClient extends RestClient {
         JSONObject exr = new JSONObject();
         exr.put("all", cb);
         exr.put("method", method);
-        
+
         exr.put("query",query);
-        
-        
-        
+
         if ( code == null || !state.equals(query.get("state")) ) {
             return new JSONObject();
         }
         try {
-            return authcode(code);
+            exr.putJSON("ac",authcode(code));
+            return exr;
         } catch (IOException ex) {
             Logger.getLogger(OAuthClient.class.getName()).log(Level.SEVERE, null, ex);
         } catch (URISyntaxException ex) {
@@ -100,11 +99,12 @@ public class OAuthClient extends RestClient {
     /**
      * リダイレクト先がある場合は指定したり
      * @param redirect
+     * @param scope
      * @return 
      * @throws java.io.IOException callbackサーバ作れなかった
      * @throws java.security.NoSuchAlgorithmException
      */
-    public URI authLink(String redirect) throws IOException, NoSuchAlgorithmException {
+    public URI authLink(String redirect, String scope) throws IOException, NoSuchAlgorithmException {
         long rnd = java.security.SecureRandom.getInstanceStrong().nextLong();
         state = Long.toHexString(rnd); // 仮
         if (redirect == null || redirect.isEmpty()) {
@@ -112,11 +112,15 @@ public class OAuthClient extends RestClient {
         } else {
             this.redirect = redirect;
         }
-        URI authp = param(info.authuri(), "response_type", "code",
-                "client_id", info.clientId(),
-                "redirect_uri", this.redirect,
-                "scope", "openid",
-                "state", state);
+        JSONObject params = new JSONObject();
+        params.put("response_type", "code");
+        params.put("client_id", info.clientId());
+        params.put("redirect_uri", this.redirect);
+        if ( scope != null ) {
+            params.put("scope", scope);
+        }
+        params.put("state", state);
+        URI authp = param(info.authuri(), params);
         return authp;
     }
 
@@ -132,7 +136,10 @@ public class OAuthClient extends RestClient {
     }
     
     public void close() throws IOException {
-        httpd.close();
+        if ( httpd != null ) {
+            httpd.close();
+            httpd = null;
+        }
     }
 
     /**

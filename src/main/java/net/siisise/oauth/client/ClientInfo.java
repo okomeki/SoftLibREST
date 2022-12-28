@@ -17,6 +17,7 @@ package net.siisise.oauth.client;
 
 import java.net.URISyntaxException;
 import net.siisise.abnf.rfc.URI3986;
+import net.siisise.json.JSONObject;
 
 /**
  * サービス情報.
@@ -34,11 +35,19 @@ public class ClientInfo {
     public final String secret;
     // アクセス権 (メモ?)
 
-    //
+    // https://accounts.google.com/.well-known/openid-configuration
+    // https://auth.login.yahoo.co.jp/yconnect/v2/.well-known/openid-configuration など
     public final String authorizeUri;
     public final String tokenUri;
     // String redirectUri;
-    
+
+    public ClientInfo(JSONObject wellKnown, String clientId, String secret) {
+        authorizeUri = (String)wellKnown.get("authorization_endpoint");
+        tokenUri = (String)wellKnown.get("token_endpoint");
+        id = clientId;
+        this.secret = secret;
+    }
+
     /**
      * 文字列で
      *
