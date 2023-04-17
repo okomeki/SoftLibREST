@@ -6,7 +6,7 @@ package net.siisise.html;
  */
 public class HTML {
     
-    public static String decode(char ch) {
+    public static String encode(char ch) {
         switch(ch) {
             case '&':
                 return "&amp;";
@@ -29,7 +29,7 @@ public class HTML {
         StringBuilder sb = new StringBuilder();
         char[] chs = src.toCharArray();
         for ( char ch : chs ) {
-            String dec = decode(ch);
+            String dec = encode(ch);
             sb.append(dec);
         }
         return sb.toString();

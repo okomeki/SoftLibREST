@@ -13,11 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.siisise.json.jws;
+package net.siisise.oauth.client;
 
 /**
- * RFC 8812?
+ *
+ * @author okome
  */
-public class JOSE7520 {
+public class OAuthException extends Exception {
+
+    public OAuthException() {
+    }
     
 }

@@ -13,11 +13,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.siisise.json.jws;
+package net.siisise.net.ws;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.Socket;
 
 /**
- * RFC 8812?
+ * WebSocket っぽいなにか Client篇.
+ * 主? RFC 6455, 8307
+ * RFC 8615
  */
-public class JOSE7520 {
+public class WebSocket {
+    Socket soc;
+    private InputStream in;
+    private final OutputStream out;
+
+    public WebSocket(Socket soc) throws IOException {
+        this.soc = soc;
+        in = soc.getInputStream();
+        out = soc.getOutputStream();
+    }
     
 }

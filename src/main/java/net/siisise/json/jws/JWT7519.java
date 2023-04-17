@@ -2,10 +2,14 @@ package net.siisise.json.jws;
 
 import java.security.NoSuchAlgorithmException;
 import net.siisise.json.JSON;
+import net.siisise.json.JSONArray;
 import net.siisise.json.JSONValue;
 
 /**
  * 署名とか使えるもの。
+ * JWSかJWEなかたち.
+ * JWS(PAYLOAD) 署名
+ * JWE(PAYLOAD) 暗号化
  * 署名:HS256 HMAC署名(本人のみ確認可能)
  * 暗号化:なし
  */
@@ -24,6 +28,19 @@ public class JWT7519 {
     void init(byte[] key) throws NoSuchAlgorithmException {
         jws.setTyp("JWT");
         jws.setKey(key); // HS256 とりあえず固定
+    }
+    
+    /**
+     * OpenID Connect用.
+     * @param keys jwks
+     */
+    public void init(JSONArray keys) {
+        jws.setTyp("JWT");
+        jws.setRsaPublic(keys);
+    }
+    
+    public void setRsaPublic(JSONArray keys) {
+        jws.setRsaPublic(keys);
     }
 
     /**

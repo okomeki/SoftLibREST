@@ -16,10 +16,13 @@
 package net.siisise.rest;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Type;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.ProtocolException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
@@ -30,22 +33,34 @@ import net.siisise.io.FileIO;
 import net.siisise.net.HttpClient;
 import net.siisise.json.bind.OMAP;
 import net.siisise.json.JSON;
-import net.siisise.json.JSONObject;
 import net.siisise.json.JSONValue;
 
 /**
  * JSONを使うのでSoftLibに置けない仮置き場
  */
 public class RestClient extends HttpClient {
-    
-   
-    // Nature Remo っぽい
+
+    /**
+     * 
+     * Nature Remo っぽい
+     * @param baseURI
+     * @param accessToken 
+     */
     public RestClient(String baseURI, String accessToken) {
-        headers.put("Accept", "application/json");
+/*
+        URL uri;
+        try {
+            uri = new URL(baseURI);
+            headers.put("Host", uri.getHost());
+        } catch (MalformedURLException ex) {
+            Logger.getLogger(RestClient.class.getName()).log(Level.SEVERE, null, ex);
+        }
+*/        
+        headers.put("Accept", "application/json,*/*;q=0.8");
         baseuri = baseURI;
         setAccessToken(accessToken);
     }
-
+    
     /**
      * RFC 6750 OAuth 2.0 Bearer
      * @param accessToken 
@@ -83,14 +98,14 @@ public class RestClient extends HttpClient {
      * @param params
      * @return 
      */
-    public static URI param(String uri, JSONObject params) {
+    public static URI param(String uri, Map<String,String> params) {
         StringBuilder u = new StringBuilder(uri);
         char ap = '?';
-        for ( Object key : params.keySet() ) {
+        for ( String key : params.keySet() ) {
             u.append(ap);
-            u.append(formPercentEncode((String)key));
+            u.append(formPercentEncode(key));
             u.append("=");
-            u.append(formPercentEncode((String)params.get(key)));
+            u.append(formPercentEncode(params.get(key)));
             ap ='&';
         }
         return URI.create(u.toString());
@@ -113,10 +128,34 @@ public class RestClient extends HttpClient {
         return html.toString();
     }
 
-    public <T> T get(String uri) throws RestException, IOException, URISyntaxException {
-        return get(uri, JSONValue.class);
+    /**
+     * 
+     * @param <T>
+     * @param uri 相対URL
+     * @param params
+     * @return
+     * @throws RestException
+     * @throws IOException
+     */
+    public <T> T get(String uri, String... params) throws RestException, IOException {
+        if (params.length >= 2) {
+            return get(param(baseuri + uri,params), JSONValue.class);
+        }
+        return get(URI.create(baseuri + uri), JSONValue.class);
     }
 
+    public <T> T get(String uri, Map<String, String> paramMap) throws RestException, IOException {
+        return get(param(baseuri + uri, paramMap));
+    }
+
+    /**
+     * 
+     * @param <T>
+     * @param uri 完全URL
+     * @return
+     * @throws RestException
+     * @throws IOException 
+     */
     public <T> T get(URI uri) throws RestException, IOException {
         return get(uri, JSONValue.class);
     }
@@ -125,7 +164,7 @@ public class RestClient extends HttpClient {
      * fieldから型情報を取得してその形で戻り値を返す
      *
      * @param <T>
-     * @param url
+     * @param url 相対URL
      * @param field 代入するフィールド ここから型情報を取得する
      * @return
      * @throws net.siisise.rest.RestException
@@ -139,43 +178,84 @@ public class RestClient extends HttpClient {
     /**
      *
      * @param <T>
-     * @param url
+     * @param url 相対URL
      * @param genType 期待する戻り型
      * @return
      * @throws net.siisise.rest.RestException
      * @throws IOException
-     * @throws URISyntaxException
      */
-    public <T> T get(String url, Type genType) throws RestException, IOException, URISyntaxException {
-        return get(new URI(baseuri + url), genType);
+    public <T> T get(String url, Type genType) throws RestException, IOException {
+        return get(URI.create(baseuri + url), genType);
     }
 
     /**
      * HTTP GET パラメータ未対応
      *
      * @param <T>
-     * @param uri
+     * @param uri 完全URL
      * @param type 期待する戻り型
      * @return JSON固定 bindとかしない
      * @throws net.siisise.rest.RestException
      * @throws IOException
      */
     public <T> T get(URI uri, Type type) throws RestException, IOException {
-        HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
-
-        headers.forEach((key, val) -> conn.setRequestProperty(key, val));
-
+        HttpURLConnection conn = getConnect(uri);
         return result(conn, type);
     }
 
-    public JSONValue post(String uri, Map<String, String> paramMap) throws RestException, IOException, URISyntaxException {
-        return post(new URI(baseuri + uri), paramMap);
+    /**
+     * body にパラメータ入れる
+     * @param uri
+     * @param paramMap
+     * @return
+     * @throws RestException
+     * @throws IOException 
+     */
+    public JSONValue post(String uri, Map<String, String> paramMap) throws RestException, IOException {
+        return post(URI.create(baseuri + uri), paramMap);
+    }
+    
+    public <T extends JSONValue> T postJSON(String uri, JSONValue json) throws IOException, RestException {
+        return post(URI.create(baseuri + uri), "application/json", 
+                json.toJSON(JSONValue.NOBR_MINESC).getBytes(StandardCharsets.UTF_8));
     }
 
-    public JSONValue post(String uri, String... parameters) throws RestException, IOException, URISyntaxException {
-        return post(new URI(baseuri + uri), parameters);
+    /**
+     * JSON なし
+     * @param <T>
+     * @param uri
+     * @return
+     * @throws IOException
+     * @throws RestException 
+     */
+    public <T extends JSONValue> T post(String uri) throws IOException, RestException {
+        return post(URI.create(baseuri + uri), null, null);
     }
 
+    public <T extends JSONValue> T post(String uri, String mime, byte[] body) throws IOException, RestException {
+        return post(URI.create(baseuri + uri), mime, body);
+    }
+
+    /**
+     * POST 一般的な
+     * @param uri
+     * @param parameters 名と値のペア
+     * @return
+     * @throws RestException
+     * @throws IOException
+     */
+    public JSONValue post(String uri, String... parameters) throws RestException, IOException {
+        return post(URI.create(baseuri + uri), parameters);
+    }
+
+    /**
+     * POST body にパラメータを入れる
+     * @param uri
+     * @param paramMap
+     * @return
+     * @throws RestException
+     * @throws IOException 
+     */
     public JSONValue post(URI uri, Map<String, String> paramMap) throws RestException, IOException {
         List<String> params = new ArrayList<>();
         paramMap.forEach((key, val) -> {
@@ -187,8 +267,7 @@ public class RestClient extends HttpClient {
 
     /**
      * POST.application/x-www-form-urlencoded
-
- エラーは Exception で
+     * エラーは Exception で
      * @param uri
      * @param parameters エンコードしてない
      * @return JSON
@@ -200,12 +279,76 @@ public class RestClient extends HttpClient {
         return result(conn, JSONValue.class);
     }
 
-    HttpURLConnection postRequest(URI uri, String... parameters) throws IOException {
+    public <T extends JSONValue> T postJSON(URI uri, JSONValue json) throws IOException, RestException {
+        return post(uri, "application/json", json.toJSON().getBytes(StandardCharsets.UTF_8));
+    }
+    
+    public <T extends JSONValue> T post(URI uri, String mime, byte[] body) throws IOException, RestException {
+        HttpURLConnection conn = postConnect(uri);
+        
+        System.out.println(new String(body, StandardCharsets.UTF_8));
+
+        if (body != null) {
+            conn.setDoOutput(true);
+            conn.setRequestProperty("Content-Type", mime);
+            conn.setRequestProperty("Content-Length", "" + body.length);
+            OutputStream out = conn.getOutputStream();
+            out.write(body);
+            out.flush();
+        }
+        return result(conn, JSONValue.class);
+    }
+    
+    HttpURLConnection getConnect(URI uri) throws MalformedURLException, ProtocolException, IOException {
+        HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
+        // https限定
+        conn.setRequestMethod("GET");
+        headers.forEach((key, val) -> conn.setRequestProperty(key, val));
+/*
+        System.out.println("S: GET " + uri.toString());
+        Map<String, List<String>> rp = conn.getRequestProperties();
+        System.out.println();
+        System.out.println("GET " + uri.toString());
+        for ( String key : rp.keySet() ) {
+            for ( String v : rp.get(key)) {
+                System.out.println("S: " + key + ": " + v);
+            }
+        }
+        System.out.println();
+*/
+        return conn;
+    }
+
+    HttpURLConnection postConnect(URI uri) throws MalformedURLException, ProtocolException, IOException {
         HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
         // https限定
         conn.setRequestMethod("POST");
         headers.forEach((key, val) -> conn.setRequestProperty(key, val));
+/*
+        System.out.println("S: POST " + uri.toString());
+        Map<String, List<String>> rp = conn.getRequestProperties();
+        System.out.println();
+        System.out.println("POST " + uri.toString());
+        for ( String key : rp.keySet() ) {
+            for ( String v : rp.get(key)) {
+                System.out.println("S: " + key + ": " + v);
+            }
+        }
+        System.out.println();
+*/
+        return conn;
+    }
 
+    /**
+     * 
+     * @param uri
+     * @param parameters body encode parameter
+     * @return
+     * @throws IOException 
+     */
+    HttpURLConnection postRequest(URI uri, String... parameters) throws IOException {
+        HttpURLConnection conn = postConnect(uri);
+        
         if (parameters.length > 0) {
             conn.setDoOutput(true);
             conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
@@ -236,11 +379,35 @@ public class RestClient extends HttpClient {
      */
     private <T> T result(HttpURLConnection conn, Type type) throws IOException, RestException {
         conn.connect();
+        int code = conn.getResponseCode();
+        System.out.print(code + " ");
+        System.out.println(conn.getResponseMessage());
         // conn.getResponseCode();
         //conn.getHeaderFields();
+        Map<String, List<String>> hfs = conn.getHeaderFields();
+        for ( String key : hfs.keySet() ) {
+            List<String> vs = hfs.get(key);
+            for ( String v : vs ) {
+                System.out.println("R: " + key + ": " + v);
+            }
+        }
+        
         String contentType = conn.getContentType();
-        byte[] result = FileIO.binRead(conn.getInputStream());
+        System.out.println("content-type: " + contentType);
+
+        InputStream in;
+        if ( code >= 400 ) {
+            in = conn.getErrorStream();
+        } else {
+            in = conn.getInputStream();
+        }
+
+        byte[] result = FileIO.binRead(in);
+        System.out.println(new String(result, StandardCharsets.UTF_8));
         conn.disconnect();
+        if ( code >= 400 ) {
+            throw new RestException(code, conn.getResponseMessage(), conn.getContentType(), result);
+        }
         return OMAP.valueOf(JSON.parse(result), type);
 //                JSON.parseWrap(result);
     }

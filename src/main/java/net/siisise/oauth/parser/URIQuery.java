@@ -41,7 +41,7 @@ public class URIQuery extends BNFList<List,Object> {
 
     @Override
     protected List build(List<Object> list) {
-        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+        throw new UnsupportedOperationException("Not supported yet.");
     }
 
 }

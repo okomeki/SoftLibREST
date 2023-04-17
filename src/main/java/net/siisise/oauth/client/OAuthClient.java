@@ -18,22 +18,31 @@ package net.siisise.oauth.client;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import net.siisise.io.BASE64;
+import net.siisise.json.JSONArray;
 import net.siisise.json.JSONObject;
-import net.siisise.net.HttpClient;
+import net.siisise.json.jws.JWT7519;
 import net.siisise.net.HttpServer;
 import net.siisise.rest.RestClient;
 import net.siisise.rest.RestException;
+import net.siisise.security.digest.SHA256;
 
 /**
  * OAuthのClient としていろいろ使える準備.
+ * RFC 6749
+ * RFC 7636
  */
 public class OAuthClient extends RestClient {
 
+    public static final String GRANT_TYPE_JWT_BEARER = "urn:ietf:params:oauth:grant-type:jwt-bearer"; // RFC 7523
+    public static final String CLIENT_ASSERTION_JWT_BEARER = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
     public static final String OOB = "urn:ietf:wg:oauth:2.0:oob";
 
     private AccessInfo access;
@@ -41,6 +50,8 @@ public class OAuthClient extends RestClient {
 
     private String redirect;
     private String state;
+    private String nonce;
+    private String code_verifier;
     private HttpServer httpd;
 
     /**
@@ -50,6 +61,11 @@ public class OAuthClient extends RestClient {
     public OAuthClient(ClientInfo info) {
         super("", null);
         this.info = info;
+        redirect = "http://127.0,0.1:9099/oauth-web-client/authd"; // 仮
+    }
+    
+    public void setRedirect(String uri) {
+        redirect = uri;
     }
 
     public ClientInfo info() {
@@ -57,33 +73,30 @@ public class OAuthClient extends RestClient {
     }
 
     /**
+     * 認可コードフロー.
      * callback から token 取得まで行う.
-     * @param cb
+     * @param cb method,query など
      * @return 
      */
-    public JSONObject callback(JSONObject cb) {
-        System.out.println("callback");
+    public String authCb(JSONObject cb) {
         String method = (String)cb.get("method");
-        // ? から # までのあいだ
-        String queryLine = (String)cb.get("query");
-        Map<String,String> query = null;
-        if ( queryLine != null ) {
-            query = HttpClient.decodeQuery(queryLine);
-        }
-//        URI3986.REG.find(rt, "", subrulenames); // 次 URI6874
+        Map<String,String> query = (Map)cb.get("query");
         String code = query.get("code");
         JSONObject exr = new JSONObject();
         exr.put("all", cb);
-        exr.put("method", method);
-
-        exr.put("query",query);
 
         if ( code == null || !state.equals(query.get("state")) ) {
-            return new JSONObject();
+            return new JSONObject().toJSON();
         }
         try {
-            exr.putJSON("ac",authcode(code));
-            return exr;
+            JSONObject ac = authcode(code);
+            exr.putJSON("ac",ac);
+            String idToken = (String)ac.get("id_token");
+            JWT7519 jwt = new JWT7519();
+            JSONArray algs = info.idTokenSigningAlgValuesSupported();
+            jwt.init(info.keys());
+            exr.putJSON("payload", jwt.validate(idToken));
+            return exr.toJSON();
         } catch (IOException ex) {
             Logger.getLogger(OAuthClient.class.getName()).log(Level.SEVERE, null, ex);
         } catch (URISyntaxException ex) {
@@ -92,47 +105,124 @@ public class OAuthClient extends RestClient {
             Logger.getLogger(OAuthClient.class.getName()).log(Level.SEVERE, null, ex);
         }
         
-        return exr; //authcode(code);
-       // return new JSONObject();
+        return exr.toJSON();
     }
 
     /**
-     * リダイレクト先がある場合は指定したり
-     * @param redirect
+     * Auth サーバ用.
+     * response_type code
+     * リダイレクト先がある場合
+     * @param redirect_uri
      * @param scope
-     * @return 
+     * @return auth link
      * @throws java.io.IOException callbackサーバ作れなかった
      * @throws java.security.NoSuchAlgorithmException
      */
-    public URI authLink(String redirect, String scope) throws IOException, NoSuchAlgorithmException {
-        long rnd = java.security.SecureRandom.getInstanceStrong().nextLong();
-        state = Long.toHexString(rnd); // 仮
-        if (redirect == null || redirect.isEmpty()) {
-            this.redirect = callbackLocalServer(9099, "/oauth-web-client/authd", this::callback);
-        } else {
-            this.redirect = redirect;
-        }
+    public URI authLink(URI redirect_uri, String scope) throws IOException, NoSuchAlgorithmException {
+        redirect = redirect_uri.toASCIIString();
+        return createSecureAuth("code", scope);
+    }
+    
+    /**
+     * Authorization Code
+     * ローカルサーバ用
+     * response_type code
+     * @param redirect_uri redirect URI
+     * @param callback
+     * @param scope
+     * @return auth link
+     * @throws NoSuchAlgorithmException
+     * @throws IOException 
+     */
+    public URI authLink(URI redirect_uri, Function<JSONObject,Object> callback, String scope) throws NoSuchAlgorithmException, IOException {
+        redirect = callbackLocalServer(redirect_uri, callback);
+        return createSecureAuth("code", scope);
+    }
+    
+    /**
+     * JavaScript等で処理できればいいかもしれない
+     * @param cb
+     * @return 
+     */
+    JSONObject implicitCb(JSONObject cb) {
+        return cb;
+    }
+
+    /**
+     * implicit.
+     * JavaScript 等用
+     * # でqueryが返るのでサーバで受けられない
+     * @param redirect_uri redirect URI
+     * @param scope
+     * @return auth link
+     * @throws NoSuchAlgorithmException
+     * @throws IOException 
+     */
+    public URI implicitLink(URI redirect_uri, String scope) throws NoSuchAlgorithmException, IOException {
+        redirect = callbackLocalServer(redirect_uri, this::implicitCb);
+        return createSecureAuth("token", scope);
+    }
+
+    /**
+     * client_id, redirect_uri, state, nonce をつけて auth へ
+     * @param params
+     * @return
+     * @throws NoSuchAlgorithmException 
+     */
+    URI createSecureAuth(String response_type, String scope) throws NoSuchAlgorithmException {
         JSONObject params = new JSONObject();
-        params.put("response_type", "code");
+        params.put("response_type", response_type);
         params.put("client_id", info.clientId());
         params.put("redirect_uri", this.redirect);
         if ( scope != null ) {
             params.put("scope", scope);
         }
+        SecureRandom sr = SecureRandom.getInstanceStrong();
+        BASE64 b64 = new BASE64(BASE64.URL,0);
+        byte[] rnd = new byte[8];
+        sr.nextBytes(rnd);
+        state = b64.encode(rnd); // 仮
         params.put("state", state);
-        URI authp = param(info.authuri(), params);
-        return authp;
+        sr.nextBytes(rnd);
+        nonce = b64.encode(rnd); // 今まで使われていない値
+        params.put("nonce", nonce);
+        
+        JSONArray methods = info.codeChallengeMethodsSupported();
+        if ( methods != null && methods.contains("S256")) {
+            // RFC 7636 PKCE
+            rnd = new byte[45];
+            sr.nextBytes(rnd);
+            code_verifier = b64.encode(rnd); // 43 - 128文字
+            SHA256 s256 = new SHA256();
+            String code_challenge = b64.encode(s256.digest(code_verifier.getBytes(StandardCharsets.UTF_8))); // ASCII文字としてHASH
+            params.put("code_challenge", code_challenge);
+            params.put("code_challenge_method", "S256");
+        }
+        
+        return param(info.authuri(), params);
     }
 
     /**
      * httpd 受け付け専用のhttpdを立ててみる無謀な計画.
-     * @return url
+     * @return redirect url
      */
-    String callbackLocalServer(int port, String path, Function<JSONObject,JSONObject> callback) throws IOException {
+    String callbackLocalServer(URI redirect_uri, Function<JSONObject,Object> callback) throws IOException {
+        close();
         httpd = new HttpServer();
         httpd.callback(callback);
-        port = httpd.start(port);
-        return "http://localhost:" + port + path;
+        httpd.callback(redirect_uri.getPath(), callback);
+        int port = redirect_uri.getPort();
+        String scheme = redirect_uri.getScheme();
+        if ( port == -1 ) {
+            if ( "http".equals(scheme)) {
+                port = 80;
+            } else {
+                throw new java.net.UnknownServiceException();
+            }
+        }
+        httpd.start(port);
+        
+        return redirect_uri.toASCIIString();
     }
     
     public void close() throws IOException {
@@ -143,8 +233,9 @@ public class OAuthClient extends RestClient {
     }
 
     /**
-     * token 1回目
-     * access token を取得する.
+     * token 1回目.
+     * client id, client secretが必要
+     * access token, refresh token を取得する.
      * @param code
      * @return
      * @throws java.io.IOException
@@ -152,15 +243,15 @@ public class OAuthClient extends RestClient {
      * @throws net.siisise.rest.RestException 
      */
     public JSONObject authcode(String code) throws IOException, URISyntaxException, RestException {
-        JSONObject res = (JSONObject) post(info.tokenUri(),
-                "grant_type", "authorization_code",
-                "code", code,
-                "redirect_uri", this.redirect,
-                "client_id", info.clientId(),
-                "client_secret", info.secret());
-        String at = (String) res.get("access_token");
-        setAccessToken(at);
-        return res;
+        // client id と client secret BASIC認証
+        JSONObject params = new JSONObject();
+        params.put("grant_type", "authorization_code");
+        params.put("code",code);
+        params.put("redirect_uri", redirect);
+//        params.put("client_id",info.clientId());
+//        params.put("client_secret", info.secret());
+        params.put("code_verifier", code_verifier);
+        return token(params);
     }
 
     /**
@@ -171,14 +262,50 @@ public class OAuthClient extends RestClient {
      * @throws java.net.URISyntaxException 
      */
     public JSONObject refresh() throws RestException, IOException, URISyntaxException {
-        JSONObject res = (JSONObject) post(info.tokenUri(),
-                "grant_type", "client_credentials",
-                "client_id", info.clientId(),
-                "client_secret", info.secret(),
-                "redirect_uri", this.redirect);
+        JSONObject params = new JSONObject();
+        params.put("grant_type", "refresh_token"); // "client_credentials"
+//        params.put("client_id",info.clientId());
+//        params.put("client_secret", info.secret());
+        params.put("refresh_toekn", access.refreshToken);
+        params.put("redirect_uri", redirect);
+//        params.put("code_verifier", code_verifier); // ひつよう?
+        return token(params);
+    }
+    
+    /**
+     * authからtokenまで全部込みにする予定.
+     * @throws java.net.URISyntaxException
+     * @throws java.io.IOException
+     * @throws net.siisise.oauth.client.OAuthException
+     * @deprecated まだ
+     * @return 
+     */
+    public JSONObject token() throws URISyntaxException, IOException, OAuthException {
+        JSONObject params = new JSONObject();
+        if ( access == null ) { // 初期化がひつようなのでリダイレクト発動
+            callbackLocalServer(new URI(redirect), this::authCb);
+//            URI rd = createSecureAuth("code", scope);
+            throw new OAuthException();
+        } else if ( access.refreshToken == null ) {
+            
+        } else {
+            params.put("grant_type", "refresh_token");
+            params.put("refresh_toekn", access.refreshToken);
+        }
+        params.put("redirect_uri", redirect);
+        throw new UnsupportedOperationException();
+    }
+    
+    public JSONObject token(JSONObject params) throws IOException, RestException, URISyntaxException {
+        setBasicAuthorization(info.clientId(), info.secret());
+        JSONObject res = (JSONObject) post(info.tokenUri(), params);
+        if ( access == null ) {
+            access = new AccessInfo(info);
+        }
         access.accessToken = (String)res.get("access_token");
         access.refreshToken = (String)res.get("reflesh_token");
-        res.get("expire_in");
+        access.tokenType = (String)res.get("token_type");
+        access.expiresIn = ((Number)res.get("expires_in")).intValue();
         setAccessToken(access.accessToken);
         return res;
     }

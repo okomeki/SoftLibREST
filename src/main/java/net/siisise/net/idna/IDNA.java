@@ -13,11 +13,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.siisise.json.jws;
+package net.siisise.net.idna;
+
+import java.text.Normalizer;
 
 /**
- * RFC 8812?
+ * IDNA あとで分けるかも.
+ * RFC 3490 IDNA
+ * RFC 3491 Nameprep
+ * RFC 3492 Punycode
  */
-public class JOSE7520 {
+public class IDNA {
     
+    public static String idnaEncode(String src) {
+        return java.net.IDN.toASCII(src);
+        //return punycodeEncode(nameprepEncode(src));
+    }
+    
+/*    
+    static String nameprepEncode(String src) {
+        Normalizer.normalize(src, Normalizer.Form.NFKC);
+        return src;
+    }
+    
+    static String punycodeEncode(String src) {
+        return src;
+    }
+*/
 }

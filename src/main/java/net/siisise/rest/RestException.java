@@ -20,6 +20,37 @@ package net.siisise.rest;
  */
 public class RestException extends Exception {
     
+    int code;
+//    String message;
+    String contentType;
+    byte[] body;
+    
+    
     public RestException() {
     }
+
+    public RestException(java.lang.Exception ex) {
+        super(ex);
+    }
+    
+    public RestException(int code, String message, String contentType, byte[] body) {
+        super(message);
+        this.code = code;
+//        this.message = message;
+        this.contentType = contentType;
+        this.body = body;
+    }
+    
+    public int getErrorCode() {
+        return code;
+    }
+    
+    public String getContentType() {
+        return contentType;
+    }
+    
+    public byte[] getBody() {
+        return body;
+    }
+    
 }

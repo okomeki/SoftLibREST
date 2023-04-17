@@ -21,8 +21,9 @@ package net.siisise.oauth.client;
 public class AccessInfo {
     ClientInfo client;
     String accessToken;
-    int expireIn;
+    int expiresIn;
     String refreshToken;
+    String tokenType;
     
     public AccessInfo(ClientInfo info) {
         client = info;

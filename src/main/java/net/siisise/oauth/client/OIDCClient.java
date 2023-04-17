@@ -15,13 +15,19 @@
  */
 package net.siisise.oauth.client;
 
+import java.util.List;
+
 /**
  * OpenID Connect っぽいことをする
  */
 public class OIDCClient extends OAuthClient {
-    
+
     public OIDCClient(ClientInfo info) {
         super(info);
     }
-    
+
+    public List<String> scopes() {
+        return info().scopesSupported();
+    }
+
 }
