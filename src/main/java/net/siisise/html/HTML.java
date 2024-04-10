@@ -5,7 +5,7 @@ package net.siisise.html;
  * どこに置くかは未定.
  */
 public class HTML {
-    
+
     public static String encode(char ch) {
         switch(ch) {
             case '&':
@@ -17,14 +17,14 @@ public class HTML {
             case '"':
                 return "&quot;";
             case '\'':
-                return "&#39;";
+                return "&#39;"; // single quote
             case ' ':
                 return "&nbsp;";
             default:
                 return String.valueOf(ch);
         }
     }
-    
+
     public static String esc(String src) {
         StringBuilder sb = new StringBuilder();
         char[] chs = src.toCharArray();

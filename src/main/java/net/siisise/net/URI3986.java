@@ -22,7 +22,6 @@ import net.siisise.io.PacketA;
 
 /**
  * RFC ABNF系とあとで混ぜる?
- * @author okome
  */
 public class URI3986 {
     
@@ -54,7 +53,12 @@ public class URI3986 {
         }
         return new String(rb.toByteArray(), StandardCharsets.UTF_8);
     }
-    
+
+    /**
+     * 
+     * @param encd
+     * @return 
+     */
     public static String urlPercentDecode(String encd) {
         Packet src = new PacketA(encd.getBytes(StandardCharsets.UTF_8));
         Packet dec = new PacketA();

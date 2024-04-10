@@ -3,28 +3,18 @@ package net.siisise.json.jws;
 import java.math.BigInteger;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import net.siisise.io.BASE64;
-import net.siisise.iso.asn1.tag.NULL;
-import net.siisise.iso.asn1.tag.OBJECTIDENTIFIER;
-import net.siisise.iso.asn1.tag.OCTETSTRING;
-import net.siisise.iso.asn1.tag.SEQUENCE;
 import net.siisise.json.JSONObject;
 import net.siisise.security.mac.HMAC;
 import net.siisise.json.JSON;
 import net.siisise.json.JSONArray;
 import net.siisise.json.JSONValue;
-import net.siisise.security.block.RSA;
-import net.siisise.security.digest.SHA256;
-import net.siisise.security.digest.SHA384;
-import net.siisise.security.digest.SHA512;
 import net.siisise.security.key.RSAMiniPrivateKey;
 import net.siisise.security.key.RSAPublicKey;
 
@@ -44,7 +34,7 @@ public class JWS7515 {
 
     static final Charset UTF8 = StandardCharsets.UTF_8;
     static final Map<String, String> DIGESTS = new HashMap<>();
-    static final Map<String, String> rdigests = new HashMap<>();
+//    static final Map<String, String> rdigests = new HashMap<>();
 
     /**
      * RFC 7518 section-3 "alg"
@@ -53,11 +43,11 @@ public class JWS7515 {
         DIGESTS.put("HMAC-SHA-256", "HS256"); // Required
         DIGESTS.put("HMAC-SHA-384", "HS384"); // Optional
         DIGESTS.put("HMAC-SHA-512", "HS512"); // Optional
-        DIGESTS.put("", "RS256"); // 未
+//        DIGESTS.put("", "RS256"); // 未
         
-        for ( Map.Entry<String, String> es : DIGESTS.entrySet() ) {
-            rdigests.put(es.getValue(), es.getKey());
-        }
+//        for ( Map.Entry<String, String> es : DIGESTS.entrySet() ) {
+//            rdigests.put(es.getValue(), es.getKey());
+//        }
     }
 
     private String jwsCompactHeader = null;
@@ -65,10 +55,17 @@ public class JWS7515 {
     private JSONObject protectedHeader = new JSONObject();
     private JSONObject header = new JSONObject();
     
+    /**
+     * HMAC鍵.
+     */
     private SecretKey skey;
 
     private Set<String> algorithms;
     private JSONArray rsakeyList;
+    
+    public JWS7515() {
+        protectedHeader.put("alg", "none");
+    }
 
     /**
      * 必須のHMAC-SHA-256で鍵にする。
@@ -98,16 +95,79 @@ public class JWS7515 {
         }
         jwsCompactHeader = null;
     }
+
+    /**
+     * RSA秘密鍵 (署名用)
+     * @param kid 鍵ID
+     * @param alg RS256 など
+     * @param pkey RSA秘密鍵
+     */
+    public void setRsaKey(String kid, String alg, RSAMiniPrivateKey pkey) {
+        setRsaKey(kid, alg, rsaPrivateToJwk(pkey));
+    }
+
+    /**
+     * RSA公開鍵 (検証用).
+     * テスト鍵っぽいもの
+     * @param kid kid
+     * @param alg アルゴリズム RS256など
+     * @param key RSA公開鍵
+     */
+    public void setRsaKey(String kid, String alg, RSAPublicKey key) {
+        setRsaKey(kid, alg, rsaPublicToJwk(key));
+    }
+
+    /**
+     * RSA鍵 (署名用/検証用)
+     * @param kid 鍵ID
+     * @param alg RS256 など
+     * @param key 鍵
+     */
+    public void setRsaKey(String kid, String alg, JSONObject key) {
+        if ( rsakeyList == null ) {
+            rsakeyList = new JSONArray();
+        }
+        if ( key == null ) {
+            setAlg("none");
+        } else {
+            setAlg(alg);
+            setKid(kid);
+            rsakeyList.putJSON(kid, key);
+        }
+        jwsCompactHeader = null;
+    }
     
     /**
-     * 公開鍵リスト (検証用)
+     * RSA鍵の選択 (署名用)
+     * @param kid 
+     */
+    public void setKid(String kid) {
+        protectedHeader.put("kid", kid);
+    }
+    
+    public void setAlg(String alg) {
+        protectedHeader.put("alg", alg);
+    }
+    
+    public String getKid() {
+        return (String) protectedHeader.get("kid");
+    }
+
+    public String getAlg() {
+        return (String) protectedHeader.get("alg");
+    }
+
+    /**
+     * RSA公開鍵リスト (検証用)
      * @param keys jwks
      */
     public void setRsaPublic(JSONArray keys) {
         rsakeyList = keys;
         JSONObject key = (JSONObject)keys.get(0);
         String alg = (String)key.get("alg"); // とりあえず
-        protectedHeader.put("alg", alg);
+//        String kid = (String)key.get("kid");
+        setAlg(alg);
+//        protectedHeader.put("kid", kid);
     }
 
     /**
@@ -154,7 +214,7 @@ public class JWS7515 {
     public String compactHeader() {
         if (jwsCompactHeader == null) {
             BASE64 b64 = new BASE64(BASE64.URL, 0);
-            jwsCompactHeader = b64.encode(protectedHeader.toJSON(JSONValue.NOBR).getBytes(StandardCharsets.UTF_8));
+            jwsCompactHeader = b64.encode(((String)protectedHeader.rebind(JSONValue.NOBR)).getBytes(StandardCharsets.UTF_8));
         }
         return jwsCompactHeader;
     }
@@ -183,88 +243,102 @@ public class JWS7515 {
         }
         return sb.toString();
     }
-
-    private byte[] hmac(SecretKey key, String src) {
-        byte[] tmp = src.getBytes(UTF8);
-        return new HMAC(key).doFinal(tmp);
-    }
     
-    private RSAMiniPrivateKey jwkToRSAPrivate(JSONObject jwk) {
-        BigInteger n = decodeBigHex((String)jwk.get("n"));
-        BigInteger d = decodeBigHex((String)jwk.get("d"));
-        return new RSAMiniPrivateKey(n, d);
+    private JSONObject rsaPrivateToJwk(RSAMiniPrivateKey key) {
+        JSONObject jwk = new JSONObject();
+        String n = encodeBigHex(key.getModulus());
+        String d = encodeBigHex( key.getPrivateExponent() );
+        jwk.put("n", n);
+        jwk.put("d", d);
+        return jwk;
     }
 
-    private RSAPublicKey jwkToRSAPublic(JSONObject jwk) {
-        BigInteger n = decodeBigHex((String)jwk.get("n"));
-        BigInteger e = decodeBigHex((String)jwk.get("e"));
-        return new RSAPublicKey(n, e);
+    private JSONObject rsaPublicToJwk(RSAPublicKey key) {
+        JSONObject jwk = new JSONObject();
+        String n = encodeBigHex(key.getModulus());
+        String e = encodeBigHex( key.getPublicExponent());
+        jwk.put("n", n);
+        jwk.put("e", e);
+        return jwk;
     }
 
     /**
-     * 
-     * @param asn
+     * RSASSA_PKCS1_v1_5 sign
+     * RSASSA-PSS
+     * @param data
      * @return 
      */
-    private byte[] rsaSign(byte[] asn) {
-        String kid = (String) protectedHeader.get("kid");
+    private byte[] rsassaSign(byte[] data) {
+        String alg = getAlg(); //(String) protectedHeader.get("alg");
+        String kid = getKid();
+        JWA7518.RSASSA ssa = toRSASSA(alg);
         JSONObject jwk = selectKey(kid); // 秘密鍵を指しておいて
-        
-        RSAMiniPrivateKey pkey = jwkToRSAPrivate(jwk);
-        String nkey = (String)jwk.get("n");
-        // padding
-        int nlen = nkey.length() * 3 / 4;
-        byte[] pad = new byte[nlen];
-        int len = pad.length - asn.length;
-        pad[1] = 1;
-        for (int i = 2; i < len - 1; i++ ) {
-            pad[i] = (byte)0xff;
-        }
-        System.arraycopy(asn, 0, pad, len, asn.length);
-        BigInteger bi = RSA.os2ip(pad);
-        BigInteger r = pkey.rsasp1(bi);
-        return RSA.i2osp(r, nlen);
+        return ssa.sign(jwk, data);
     }
-    
-    private byte[] decodeRsa(byte[] sign, JSONObject key) {
-        BigInteger di = new BigInteger(sign);
-        
-        RSAPublicKey pub = jwkToRSAPublic(key);
-        String nkey = (String)key.get("n");
-        BigInteger r = pub.rsavp1(di); // 署名検証
-        
-        byte[] dec = r.toByteArray(); // 1バイト短い予定
-        if ( dec.length + 1 != nkey.length() * 3 / 4 || dec[0] != 1) {
+
+    private JWA7518.RSASSA toRSASSA(String alg) {
+        if ( alg.startsWith("RS")) {
+            return new JWA7518.PKCS1(alg);
+        } else if ( alg.startsWith("PS")) {
+            return new JWA7518.PSS(alg);
+        }
+        throw new UnsupportedOperationException();
+    }
+
+    byte[] hmacSign(byte[] s) {
+        HMAC hmac = new HMAC(skey);
+        hmac.update(s);
+        return hmac.sign();
+    }
+
+    void validateHS(String[] sp) {
+        BASE64 b64 = new BASE64(BASE64.URL, 0);
+            // HS256 HS384 HS512の検証
+        HMAC hmac = new HMAC(skey);
+        hmac.update((sp[0] + "." + sp[1]).getBytes(UTF8));
+
+        // 違うJSONな場合もあるのでheaderは比較しない方がいい
+        if (!hmac.verify(b64.decode(sp[2]))) {
             throw new SecurityException();
         }
-        int i = 1;
-        while ((dec[i] & 0xff) == 0xff) {
-         i++;
-        }
-        if (i == 1 || dec[i++] != 0) {
-            throw new SecurityException();
-        }
-        byte[] src = new byte[dec.length - i];
-        System.arraycopy(dec,i,src,0,dec.length - i);
-        return src;
     }
 
     /**
-     * BASE64URL バイナリをBigIntegerにするだけ.
-     * 
-     * @param s BASE64URLエンコードな数値
-     * @return new BigInteger(0x00 + BASE64URLdecode(s))
+     * RSASSA-PKCS1-v1_5 using SHA-XXX または
+     * RSASSA-PSS using SHA-XXX and MGF1 with SHA-XXX 検証.
+     * @param sp
+     * @param jwsHeader alg, kid
      */
-    private BigInteger decodeBigHex(String s) {
-        BASE64 b64 = new BASE64(BASE64.URL,0);
-        byte[] d = b64.decode(s);
-        byte[] p = new byte[d.length + 1]; // フラグ消し
-        System.arraycopy(d, 0, p, 1, d.length);
-        return new BigInteger(p);
+    void validateRSASSA(String[] sp, JSONObject jwsHeader) {
+        String alg = (String)jwsHeader.get("alg");
+        BASE64 b64 = new BASE64(BASE64.URL, 0);
+        byte[] m = (sp[0] + "." + sp[1]).getBytes(UTF8);
+        byte[] s = b64.decode(sp[2]);
+        JSONObject jwk = selectKey((String)jwsHeader.get("kid"));
+
+        JWA7518.RSASSA ssa = toRSASSA(alg);
+        if (!ssa.verify(jwk, m,s)) {
+            throw new SecurityException();
+        }
     }
     
     /**
-     * JWS JSON Serialization.
+     * 
+     * @param n
+     * @return 
+     */
+    private String encodeBigHex(BigInteger n) {
+        byte[] d = n.toByteArray();
+        if (d[0] == 0) {
+            byte[] p = new byte[d.length - 1];
+            System.arraycopy(d, 1, p, 0, p.length);
+            d = p;
+        }
+        BASE64 b64 = new BASE64(BASE64.URL, 0);
+        return b64.encode(d);
+    }
+    
+    /**
      * JSON型のハッシュ計算による署名.
      * HSとRSたぶん
      *
@@ -278,39 +352,32 @@ public class JWS7515 {
         if (!protectedHeader.isEmpty()) {
             jwso.put("protected", compactHeader());
         }
-        if ( !header.isEmpty()) {
+        if (!header.isEmpty()) {
             jwso.put("header", JSON.copy(header));
         }
-        if ( payload != null ) {
+        if (payload != null) {
             jwso.put("payload", b64.encode(payload));
         }
         String alg = (String) protectedHeader.get("alg");
+        String[] sp = new String[2];
+        sp[0] = (String)jwso.get("protected");
+        if ( sp[0] == null ) {
+            sp[0] = "";
+        }
+        sp[1] = (String)jwso.get("payload");
+        if ( sp[1] == null ) {
+            sp[1] = "";
+        }
+        byte[] s = (sp[0] + "." + sp[1]).getBytes(StandardCharsets.UTF_8);
         if ( skey != null && "HS256".equals(alg) || "HS384".equals(alg) || "HS512".equals(alg)) {
-            HMAC hmac = new HMAC(skey);
-            String pro = (String) jwso.get("protected");
-            if ( pro != null ) {
-                hmac.update(pro.getBytes(StandardCharsets.UTF_8));
-            }
-            hmac.update(new byte[] {'.'});
-            String pay = (String) jwso.get("payload");
-            if ( pay != null ) {
-                hmac.update(pay.getBytes(StandardCharsets.UTF_8));
-            }
-            jwso.put("signature", b64.encode(hmac.doFinal()));
-        } else if ("RS256".equals(alg) || "RS384".equals(alg) || "RS512".equals(alg)) {
-            String[] sp = new String[2];
-            sp[0] = (String) jwso.get("protected");
-            sp[1] = (String) jwso.get("payload");
-            byte[] asn = digestRS(sp,alg);
-            jwso.put("signature", b64.encode(rsaSign(asn)));
+            jwso.put("signature", b64.encode(hmacSign(s)));
+        } else if ("RS256".equals(alg) || "RS384".equals(alg) || "RS512".equals(alg) ||
+                   "PS256".equals(alg) || "PS384".equals(alg) || "PS512".equals(alg)) {
+            jwso.put("signature", b64.encode(rsassaSign(s)));
         } else if (!"none".equals(alg)) {
             throw new SecurityException("alg:" + alg);
         }
         return jwso;
-    }
-
-    String jwsSignature() {
-        throw new java.lang.UnsupportedOperationException("jwsSignature");
     }
 
     /**
@@ -349,19 +416,9 @@ public class JWS7515 {
             throw new SecurityException(typ + " header alg exception");
         }
         if ( alg.startsWith("HS")) {
-            // HS256 HS384 HS512の検証
-            //skeyと同じなので作らなくてもいい
-//            SecretKey decKey = new SecretKeySpec(skey.getEncoded(), rdigests.get(alg));
-
-            byte[] keyDigest = hmac(skey, sp[0] + "." + sp[1]);
-            byte[] jwsDigest = b64.decode(sp[2]);
-
-            // 違うJSONな場合もあるのでheaderは比較しない方がいい
-            if (!Arrays.equals(keyDigest, jwsDigest)) {
-                throw new SecurityException();
-            }
-        } else if ( alg.startsWith("RS")) {
-            validateRS(sp, jwsHeader);
+            validateHS(sp);
+        } else if ( alg.startsWith("RS") || alg.startsWith("PS")) {
+            validateRSASSA(sp, jwsHeader);
         } else if ( alg.equals("none") ) {
             if ( !sp[2].isEmpty() ) {
                 throw new SecurityException();
@@ -372,66 +429,6 @@ public class JWS7515 {
         return b64.decode(sp[1]);
     }
 
-    /**
-     * ハッシュとASN.1ヘッダ
-     * @param sp ヘッダとpayload
-     * @param alg
-     * @return ASN.1型ハッシュ
-     */
-    byte[] digestRS(String[] sp, String alg) {
-        MessageDigest md;
-        String oid;
-
-        switch (alg) {
-            case "RS256":
-                md = new SHA256();
-                oid = SHA256.OBJECTIDENTIFIER;
-                break;
-            case "RS384":
-                md = new SHA384();
-                oid = SHA384.OBJECTIDENTIFIER;
-                break;
-            case "RS512":
-                md = new SHA512();
-                oid = SHA512.OBJECTIDENTIFIER;
-                break;
-            default:
-                throw new UnsupportedOperationException("Unsupported alg:" + alg);
-        }
-        byte[] keyDigest = md.digest((sp[0] + "." + sp[1]).getBytes(UTF8));
-        SEQUENCE rsa = new SEQUENCE();
-        SEQUENCE algt = new SEQUENCE();
-        algt.add(new OBJECTIDENTIFIER(oid));
-        algt.add(new NULL());
-        rsa.add(algt);
-        OCTETSTRING os = new OCTETSTRING(keyDigest);
-        rsa.add(os);
-        return rsa.encodeAll();
-    }
-    
-    void validateRS(String[] sp, JSONObject jwsHeader) {
-        String alg = (String)jwsHeader.get("alg");
-        byte[] encDigest = digestRS(sp,alg); // ASN.1ヘッダ付き
-
-        JSONObject jwk = selectKey((String)jwsHeader.get("kid"));
-        BASE64 b64 = new BASE64(BASE64.URL, 0);
-        byte[] jwsDigest = decodeRsa(b64.decode(sp[2]),jwk); // ASN.1型
-        
-        if (!Arrays.equals(encDigest, jwsDigest)) {
-            for ( int i = 0; i < jwsDigest.length; i++ ) {
-                String h = "0" + Integer.toHexString(jwsDigest[i] & 0xff);
-                System.out.print(h.substring(h.length() - 2));
-            }
-            System.out.println();
-            for ( int i = 0; i < encDigest.length; i++ ) {
-                String h = "0" + Integer.toHexString(encDigest[i] & 0xff);
-                System.out.print(h.substring(h.length() - 2));
-            }
-            System.out.println();
-            throw new SecurityException("" + encDigest.length + " " + jwsDigest.length);
-        }
-    }
-    
     /**
      * エラー足りないかも.
      * @param jws

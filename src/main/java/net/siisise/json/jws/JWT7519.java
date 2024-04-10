@@ -25,7 +25,7 @@ public class JWT7519 {
      * @param key
      * @throws NoSuchAlgorithmException 
      */
-    void init(byte[] key) throws NoSuchAlgorithmException {
+    public void init(byte[] key) throws NoSuchAlgorithmException {
         jws.setTyp("JWT");
         jws.setKey(key); // HS256 とりあえず固定
     }
@@ -50,7 +50,7 @@ public class JWT7519 {
      * @return JWT
      */
     public String sign(JSONValue payload) {
-        return jws.compact(payload.toJSON(JSONValue.NOBR));
+        return jws.compact(payload.rebind(JSONValue.NOBR));
     }
 
     /**
