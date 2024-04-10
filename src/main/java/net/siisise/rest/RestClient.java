@@ -27,16 +27,22 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import net.siisise.bind.Rebind;
 import net.siisise.io.FileIO;
-import net.siisise.net.HttpClient;
-import net.siisise.json.bind.OMAP;
+import net.siisise.net.http.HttpClient;
 import net.siisise.json.JSON;
 import net.siisise.json.JSONValue;
 
 /**
  * JSONを使うのでSoftLibに置けない仮置き場
+ * 
+ * post www-
+ * post blob
+ * post JSON
+ * 3つくらいに対応する.
  */
 public class RestClient extends HttpClient {
 
@@ -111,6 +117,13 @@ public class RestClient extends HttpClient {
         return URI.create(u.toString());
     }
 
+    /**
+     * 
+     * @param url
+     * @param name
+     * @param nv
+     * @return 
+     */
     public static String html(String url, String name, String... nv) {
         StringBuilder html = new StringBuilder();
         html.append("<form action=\"");
@@ -144,15 +157,37 @@ public class RestClient extends HttpClient {
         return get(URI.create(baseuri + uri), JSONValue.class);
     }
 
+    /**
+     * GET
+     * @param uri
+     * @param accept content-type
+     * @param params
+     * @return bin
+     * @throws IOException 
+     */
+    public byte[] getBlob(String uri, String accept, String... params) throws IOException {
+        URI u = param(baseuri + uri, params);
+        return getBlob(u, accept);
+    }
+
+    /**
+     * GET
+     * @param <T>
+     * @param uri
+     * @param paramMap
+     * @return
+     * @throws RestException
+     * @throws IOException 
+     */
     public <T> T get(String uri, Map<String, String> paramMap) throws RestException, IOException {
         return get(param(baseuri + uri, paramMap));
     }
 
     /**
-     * 
-     * @param <T>
+     * GET JSON
+     * @param <T> たぶんJSON
      * @param uri 完全URL
-     * @return
+     * @return JSONな戻りを期待
      * @throws RestException
      * @throws IOException 
      */
@@ -176,7 +211,7 @@ public class RestClient extends HttpClient {
     }
 
     /**
-     *
+     * 特定の戻り型でGET 
      * @param <T>
      * @param url 相対URL
      * @param genType 期待する戻り型
@@ -204,6 +239,24 @@ public class RestClient extends HttpClient {
     }
 
     /**
+     * GET でバイト列として取得.
+     * @param uri
+     * @param accept content-type
+     * @return result bin
+     * @throws IOException 
+     */
+    public byte[] getBlob(URI uri, String accept) throws IOException {
+        HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
+        conn.setRequestMethod("GET");
+
+        Map<String,String> hds = new LinkedHashMap<>(headers);
+        hds.put("accept", accept);
+
+        hds.forEach((key, val) -> conn.setRequestProperty(key, val));
+        return FileIO.binRead(conn.getInputStream());
+    }
+
+    /**
      * body にパラメータ入れる
      * @param uri
      * @param paramMap
@@ -215,9 +268,18 @@ public class RestClient extends HttpClient {
         return post(URI.create(baseuri + uri), paramMap);
     }
     
+    /**
+     * パラメータをJSONにまとめて送信.
+     * @param <T>
+     * @param uri
+     * @param json
+     * @return
+     * @throws IOException
+     * @throws RestException 
+     */
     public <T extends JSONValue> T postJSON(String uri, JSONValue json) throws IOException, RestException {
         return post(URI.create(baseuri + uri), "application/json", 
-                json.toJSON(JSONValue.NOBR_MINESC).getBytes(StandardCharsets.UTF_8));
+                json.rebind(JSONValue.NOBR_MINESC).getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -257,12 +319,16 @@ public class RestClient extends HttpClient {
      * @throws IOException 
      */
     public JSONValue post(URI uri, Map<String, String> paramMap) throws RestException, IOException {
+        return post(uri, paramToArray(paramMap));
+    }
+    
+    String[] paramToArray(Map<String, String> paramMap) {
         List<String> params = new ArrayList<>();
         paramMap.forEach((key, val) -> {
             params.add(key);
             params.add(val);
         });
-        return post(uri, params.toArray(new String[0]));
+        return params.toArray(new String[0]);
     }
 
     /**
@@ -279,10 +345,29 @@ public class RestClient extends HttpClient {
         return result(conn, JSONValue.class);
     }
 
+    /**
+     * POST application/json
+     * @param <T>
+     * @param uri
+     * @param json
+     * @return
+     * @throws IOException
+     * @throws RestException 
+     */
     public <T extends JSONValue> T postJSON(URI uri, JSONValue json) throws IOException, RestException {
         return post(uri, "application/json", json.toJSON().getBytes(StandardCharsets.UTF_8));
     }
     
+    /**
+     * BODY送信
+     * @param <T>
+     * @param uri
+     * @param mime
+     * @param body
+     * @return
+     * @throws IOException
+     * @throws RestException 
+     */
     public <T extends JSONValue> T post(URI uri, String mime, byte[] body) throws IOException, RestException {
         HttpURLConnection conn = postConnect(uri);
         
@@ -298,7 +383,15 @@ public class RestClient extends HttpClient {
         }
         return result(conn, JSONValue.class);
     }
-    
+
+    /**
+     * 
+     * @param uri
+     * @return
+     * @throws MalformedURLException
+     * @throws ProtocolException
+     * @throws IOException 
+     */
     HttpURLConnection getConnect(URI uri) throws MalformedURLException, ProtocolException, IOException {
         HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
         // https限定
@@ -319,6 +412,14 @@ public class RestClient extends HttpClient {
         return conn;
     }
 
+    /**
+     * 
+     * @param uri
+     * @return
+     * @throws MalformedURLException
+     * @throws ProtocolException
+     * @throws IOException 
+     */
     HttpURLConnection postConnect(URI uri) throws MalformedURLException, ProtocolException, IOException {
         HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
         // https限定
@@ -408,7 +509,7 @@ public class RestClient extends HttpClient {
         if ( code >= 400 ) {
             throw new RestException(code, conn.getResponseMessage(), conn.getContentType(), result);
         }
-        return OMAP.valueOf(JSON.parse(result), type);
+        return Rebind.valueOf(JSON.parse(result), type);
 //                JSON.parseWrap(result);
     }
 }

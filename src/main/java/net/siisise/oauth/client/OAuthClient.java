@@ -16,6 +16,7 @@
 package net.siisise.oauth.client;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
@@ -29,7 +30,7 @@ import net.siisise.io.BASE64;
 import net.siisise.json.JSONArray;
 import net.siisise.json.JSONObject;
 import net.siisise.json.jws.JWT7519;
-import net.siisise.net.HttpServer;
+import net.siisise.net.http.HttpServer;
 import net.siisise.rest.RestClient;
 import net.siisise.rest.RestException;
 import net.siisise.security.digest.SHA256;
@@ -79,7 +80,7 @@ public class OAuthClient extends RestClient {
      * @return 
      */
     public String authCb(JSONObject cb) {
-        String method = (String)cb.get("method");
+//        String method = (String)cb.get("method");
         Map<String,String> query = (Map)cb.get("query");
         String code = query.get("code");
         JSONObject exr = new JSONObject();
@@ -220,7 +221,8 @@ public class OAuthClient extends RestClient {
                 throw new java.net.UnknownServiceException();
             }
         }
-        httpd.start(port);
+        InetAddress loopback = InetAddress.getLoopbackAddress();
+        httpd.start(loopback, port);
         
         return redirect_uri.toASCIIString();
     }
