@@ -3,6 +3,7 @@ JSON REST Client
 
 簡単なHTTP REST Client
 
-OAuth, OpenID Connectの一部実装
+OAuth, OpenID Connect っぽいものもとりあえずここ
 
 JOSE JWS, JWT
+JWS HMAC系HS256,HS384,HS512,RSASSA-PKCS1-v1_5,RSASSA-PSSに対応
