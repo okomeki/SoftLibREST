@@ -1,4 +1,4 @@
-package net.siisise.json.jws;
+package net.siisise.json.jose;
 
 /**
  *

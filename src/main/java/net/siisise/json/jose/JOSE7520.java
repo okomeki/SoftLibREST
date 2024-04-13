@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.siisise.json.jws;
+package net.siisise.json.jose;
 
 /**
  * RFC 8812?

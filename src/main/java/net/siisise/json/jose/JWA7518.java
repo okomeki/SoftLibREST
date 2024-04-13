@@ -1,4 +1,4 @@
-package net.siisise.json.jws;
+package net.siisise.json.jose;
 
 import java.math.BigInteger;
 import java.security.MessageDigest;

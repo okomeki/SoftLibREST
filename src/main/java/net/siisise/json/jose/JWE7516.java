@@ -1,4 +1,4 @@
-package net.siisise.json.jws;
+package net.siisise.json.jose;
 
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -21,15 +21,15 @@ import net.siisise.security.key.RSAPublicKey;
 public class JWE7516 {
     private static final Charset UTF8 = StandardCharsets.UTF_8;
     
-    JSONObject jweProtectedHeader;
-    byte[] cek;
-    byte[] jweEncryptedKey;
-    byte[] jweInitializationVector;
-    byte[] jweCiphertext;
-    byte[] jweAuthenticationTag;
-    byte[] jweAAD;
+    private JSONObject jweProtectedHeader;
+    private byte[] cek;
+    private byte[] jweEncryptedKey;
+    private byte[] jweInitializationVector;
+    private byte[] jweCiphertext;
+    private byte[] jweAuthenticationTag;
+    private byte[] jweAAD;
     
-    SecureRandom srnd;
+    private SecureRandom srnd;
     RSAMiniPrivateKey key;
     RSAPublicKey pub;
     

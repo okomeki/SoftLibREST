@@ -1,4 +1,4 @@
-package net.siisise.json.jws;
+package net.siisise.json.jose;
 
 import java.security.NoSuchAlgorithmException;
 import net.siisise.json.JSON;
@@ -15,7 +15,7 @@ import net.siisise.json.JSONValue;
  */
 public class JWT7519 {
 
-    final JWS7515 jws = new JWS7515();
+    private final JWS7515 jws = new JWS7515();
     
     public JWT7519() {
     }

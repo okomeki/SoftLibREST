@@ -29,7 +29,7 @@ import java.util.logging.Logger;
 import net.siisise.io.BASE64;
 import net.siisise.json.JSONArray;
 import net.siisise.json.JSONObject;
-import net.siisise.json.jws.JWT7519;
+import net.siisise.json.jose.JWT7519;
 import net.siisise.net.http.HttpServer;
 import net.siisise.rest.RestClient;
 import net.siisise.rest.RestException;

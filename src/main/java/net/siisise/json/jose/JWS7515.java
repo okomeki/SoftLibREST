@@ -1,4 +1,4 @@
-package net.siisise.json.jws;
+package net.siisise.json.jose;
 
 import java.math.BigInteger;
 import java.nio.charset.Charset;
@@ -32,8 +32,8 @@ import net.siisise.security.key.RSAPublicKey;
  */
 public class JWS7515 {
 
-    static final Charset UTF8 = StandardCharsets.UTF_8;
-    static final Map<String, String> DIGESTS = new HashMap<>();
+    private static final Charset UTF8 = StandardCharsets.UTF_8;
+    private static final Map<String, String> DIGESTS = new HashMap<>();
 //    static final Map<String, String> rdigests = new HashMap<>();
 
     /**
