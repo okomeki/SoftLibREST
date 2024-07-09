@@ -6,7 +6,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import net.siisise.io.BASE64;
@@ -52,15 +51,14 @@ public class JWS7515 {
 
     private String jwsCompactHeader = null;
 
-    private JSONObject protectedHeader = new JSONObject();
-    private JSONObject header = new JSONObject();
+    private final JSONObject protectedHeader = new JSONObject();
+    private final JSONObject header = new JSONObject();
     
     /**
      * HMAC鍵.
      */
     private SecretKey skey;
 
-    private Set<String> algorithms;
     private JSONArray rsakeyList;
     
     public JWS7515() {
@@ -237,7 +235,6 @@ public class JWS7515 {
         sb.append(json.get("payload"));
         String signature = (String) json.get("signature");
         if ( signature != null ) {
-            // HSxxx
             sb.append(".");
             sb.append(signature);
         }
@@ -268,27 +265,31 @@ public class JWS7515 {
      * @param data
      * @return 
      */
-    private byte[] rsassaSign(byte[] data) {
+    private byte[] signRSASSA(byte[] data) {
         String alg = getAlg(); //(String) protectedHeader.get("alg");
         String kid = getKid();
-        JWA7518.RSASSA ssa = toRSASSA(alg);
+        JWA7518.RSASSA ssa = JWA7518.toRSASSA(alg);
         JSONObject jwk = selectKey(kid); // 秘密鍵を指しておいて
-        return ssa.sign(jwk, data);
+        ssa.initPrivate(jwk);
+        ssa.update(data);
+        return ssa.sign();
     }
 
-    private JWA7518.RSASSA toRSASSA(String alg) {
-        if ( alg.startsWith("RS")) {
-            return new JWA7518.PKCS1(alg);
-        } else if ( alg.startsWith("PS")) {
-            return new JWA7518.PSS(alg);
-        }
-        throw new UnsupportedOperationException();
-    }
-
-    byte[] hmacSign(byte[] s) {
+    private byte[] signHMAC(byte[] data) {
         HMAC hmac = new HMAC(skey);
-        hmac.update(s);
+        hmac.update(data);
         return hmac.sign();
+    }
+    
+    byte[] sign(String alg, byte[] s) {
+        if ( skey != null && "HS256".equals(alg) || "HS384".equals(alg) || "HS512".equals(alg)) {
+            return signHMAC(s);
+        } else if ( alg.startsWith("RS") || alg.startsWith("PS")) {
+            return signRSASSA(s);
+        } else if (!"none".equals(alg)) {
+            throw new SecurityException("alg:" + alg);
+        }
+        return null;
     }
 
     void validateHS(String[] sp) {
@@ -314,10 +315,11 @@ public class JWS7515 {
         BASE64 b64 = new BASE64(BASE64.URL, 0);
         byte[] m = (sp[0] + "." + sp[1]).getBytes(UTF8);
         byte[] s = b64.decode(sp[2]);
+        JWA7518.RSASSA ssa = JWA7518.toRSASSA(alg);
         JSONObject jwk = selectKey((String)jwsHeader.get("kid"));
-
-        JWA7518.RSASSA ssa = toRSASSA(alg);
-        if (!ssa.verify(jwk, m,s)) {
+        ssa.initPublic(jwk);
+        ssa.update(m);
+        if (!ssa.verify(s)) {
             throw new SecurityException();
         }
     }
@@ -369,13 +371,9 @@ public class JWS7515 {
             sp[1] = "";
         }
         byte[] s = (sp[0] + "." + sp[1]).getBytes(StandardCharsets.UTF_8);
-        if ( skey != null && "HS256".equals(alg) || "HS384".equals(alg) || "HS512".equals(alg)) {
-            jwso.put("signature", b64.encode(hmacSign(s)));
-        } else if ("RS256".equals(alg) || "RS384".equals(alg) || "RS512".equals(alg) ||
-                   "PS256".equals(alg) || "PS384".equals(alg) || "PS512".equals(alg)) {
-            jwso.put("signature", b64.encode(rsassaSign(s)));
-        } else if (!"none".equals(alg)) {
-            throw new SecurityException("alg:" + alg);
+        byte[] es = sign(alg, s);
+        if ( es != null ) {
+            jwso.put("signature", b64.encode(es));
         }
         return jwso;
     }

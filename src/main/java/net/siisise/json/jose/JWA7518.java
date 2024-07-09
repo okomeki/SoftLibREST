@@ -2,6 +2,7 @@ package net.siisise.json.jose;
 
 import java.math.BigInteger;
 import java.security.MessageDigest;
+import java.util.Arrays;
 import net.siisise.io.BASE64;
 import net.siisise.iso.asn1.tag.OBJECTIDENTIFIER;
 import net.siisise.json.JSONObject;
@@ -16,7 +17,7 @@ import net.siisise.security.sign.RSASSA_PKCS1_v1_5;
 import net.siisise.security.sign.RSASSA_PSS;
 
 /**
- * アルゴリズム
+ * JWA アルゴリズム
  *
  * https://www.rfc-editor.org/rfc/rfc7518
  */
@@ -36,6 +37,10 @@ public abstract class JWA7518 {
         default byte[] doFinal(byte[] src) {
             update(src);
             return doFinal();
+        }
+        
+        default boolean verify(byte[] sign) {
+            return Arrays.equals(sign, doFinal());
         }
 
         OBJECTIDENTIFIER oid();
@@ -108,9 +113,15 @@ public abstract class JWA7518 {
 
     interface SignAlgorithm {
 
+        void initPrivate(JSONObject jwk);
+        void initPublic(JSONObject jwk);
+        
+        void update(byte[] data);
         byte[] sign(JSONObject jwk, byte[] data);
+        byte[] sign();
 
         boolean verify(JSONObject jwk, byte[] data, byte[] sign);
+        boolean verify(byte[] sign);
     }
 
     static MessageDigest toDigest(String alg) {
@@ -163,26 +174,99 @@ public abstract class JWA7518 {
         BigInteger e = decodeBigHex((String)jwk.get("e"));
         return new RSAPublicKey(n, e);
     }
+    
+    /**
+     * RSASSAの選択.
+     * @param alg アルゴリズム
+     * @return RSASSA
+     */
+    static RSASSA toRSASSA(String alg) {
+        if ( alg.startsWith("RS")) {
+            return new PKCS1(alg);
+        } else if ( alg.startsWith("PS")) {
+            return new PSS(alg);
+        }
+        throw new UnsupportedOperationException();
+    }
 
+    /**
+     * RSASSAの使いやすそうな形.
+     */
     static abstract class RSASSA implements SignAlgorithm {
 
         net.siisise.security.sign.RSASSA ssa;
-
+        
+        /**
+         * RSA秘密鍵で初期化.
+         * @param jwkPrv JWK秘密鍵
+         */
         @Override
-        public byte[] sign(JSONObject jwkPrv, byte[] data) {
-            ssa.update(data);
-            return ssa.sign(jwkToRSAPrivate(jwkPrv));
+        public void initPrivate(JSONObject jwkPrv) {
+            ssa.init(jwkToRSAPrivate(jwkPrv));
+        }
+
+        /**
+         * RSA公開鍵で初期化.
+         * miniではない秘密鍵でも可
+         * @param jwkPub JWK公開鍵
+         */
+        @Override
+        public void initPublic(JSONObject jwkPub) {
+            ssa.init(jwkToRSAPublic(jwkPub));
         }
         
         @Override
+        public void update(byte[] m) {
+            ssa.update(m);
+        }
+        
+        @Override
+        public byte[] sign() {
+            return ssa.sign();
+        }
+
+        /**
+         * JWK RSA秘密鍵で署名.
+         * @param jwkPrv JWK RSA秘密鍵
+         * @param data メッセージ
+         * @return 署名
+         */
+        @Override
+        public byte[] sign(JSONObject jwkPrv, byte[] data) {
+            initPrivate(jwkPrv);
+            update(data);
+            return sign();
+        }
+
+        /**
+         * 署名検証.
+         * @param sign 署名
+         * @return 可否
+         */
+        @Override
+        public boolean verify(byte[] sign) {
+            return ssa.verify(sign);
+        }
+
+        /**
+         * 署名検証.
+         * @param jwkPub JWK公開鍵 または JWKフル秘密鍵
+         * @param data メッセージ
+         * @param sign 署名
+         * @return 可否
+         */
+        @Override
         public boolean verify(JSONObject jwkPub, byte[] data, byte[] sign) {
-            
-            ssa.update(data);
-            return ssa.verify(jwkToRSAPublic(jwkPub), sign);
+            initPublic(jwkPub);
+            update(data);
+            return verify(sign);
         }
 
     }
 
+    /**
+     * RSASSA-PKCS1-v1.5
+     */
     static class PKCS1 extends RSASSA {
         
         PKCS1(String alg) {
@@ -190,6 +274,9 @@ public abstract class JWA7518 {
         }
     }
 
+    /**
+     * RSASSA-PSS
+     */
     static class PSS extends RSASSA {
 
         PSS(String alg) {
